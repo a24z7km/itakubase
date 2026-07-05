@@ -6,6 +6,7 @@ import {execFileSync} from 'node:child_process';
 const dryRun = process.argv.includes('--dry-run');
 const distDir = 'dist';
 const tempDir = mkdtempSync(join(tmpdir(), 'itakubase-pages-'));
+const tempBranch = `gh-pages-deploy-${Date.now()}`;
 
 const run = (command, args, options = {}) => {
   const printable = [command, ...args].join(' ');
@@ -21,7 +22,7 @@ if (!existsSync(join(distDir, 'index.html'))) {
 
 try {
   run('git', ['worktree', 'add', '--detach', tempDir, 'HEAD']);
-  run('git', ['checkout', '--orphan', 'gh-pages'], {cwd: tempDir});
+  run('git', ['checkout', '--orphan', tempBranch], {cwd: tempDir});
   run('git', ['rm', '-rf', '.'], {cwd: tempDir});
 
   cpSync(distDir, tempDir, {recursive: true});
@@ -36,5 +37,6 @@ try {
   }
 } finally {
   run('git', ['worktree', 'remove', '--force', tempDir]);
+  run('git', ['branch', '-D', tempBranch]);
   rmSync(tempDir, {recursive: true, force: true});
 }
