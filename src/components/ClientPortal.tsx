@@ -186,7 +186,7 @@ export default function ClientPortal({
           className="grid grid-cols-1 md:grid-cols-3 gap-6"
         >
           {/* Dashboard Summary Widget */}
-          <div className="md:col-span-3 bg-gradient-to-r from-slate-900 to-slate-850 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+          <div className="md:col-span-3 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
             <div className="absolute right-0 bottom-0 opacity-10 translate-x-10 translate-y-10">
               <ShieldCheck className="w-64 h-64 text-white" />
             </div>
@@ -194,10 +194,10 @@ export default function ClientPortal({
               <span className="bg-blue-500/20 text-blue-300 font-semibold text-xs px-3 py-1 rounded-full border border-blue-500/30">
                 現在のステータス概要
               </span>
-              <h2 className="text-xl md:text-2xl font-bold mt-3 mb-2 font-sans tracking-tight">
+              <h2 className="text-xl md:text-2xl font-bold mt-3 mb-2 font-sans tracking-tight text-white">
                 委託先セキュリティ対策のセルフ監査プラットフォーム
               </h2>
-              <p className="text-slate-300 text-sm max-w-2xl mb-4 leading-relaxed">
+              <p className="text-slate-100 text-sm max-w-2xl mb-4 leading-relaxed">
                 Excel往復によるセキュリティ管理から、リアルタイムな回答収集とAI支援審査へ。委託先のセキュリティリスクを可視化します。
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-4 border-t border-slate-800">
