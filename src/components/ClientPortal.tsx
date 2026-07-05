@@ -274,16 +274,20 @@ export default function ClientPortal({
               </div>
               <h3 className="font-sans font-bold text-slate-800 text-lg mb-2">③ セキュリティ標準・テンプレート</h3>
               <p className="text-slate-600 text-sm leading-relaxed mb-4">
-                標準の評価基準テンプレート「SCS ⭐︎3」（8項目）、「SCS ⭐︎4」（10項目）の内容を参照・確認します。
+                標準の評価基準テンプレート「SCS ⭐︎3」「SCS ⭐︎4」「CIS Controls」の内容を参照・確認します。
               </p>
             </div>
             <div className="space-y-1 text-xs text-slate-500 border-t border-slate-100 pt-3">
               <div className="flex justify-between py-1">
                 <span>SCS ⭐︎3 基準（中規模委託先推奨）</span>
-                <span className="font-bold text-slate-800">8問</span>
+                <span className="font-bold text-slate-800">10問</span>
               </div>
               <div className="flex justify-between py-1">
                 <span>SCS ⭐︎4 基準（重要データ取扱委託先）</span>
+                <span className="font-bold text-slate-800">10問</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span>CIS Controls</span>
                 <span className="font-bold text-slate-800">10問</span>
               </div>
             </div>
@@ -560,6 +564,21 @@ export default function ClientPortal({
                         <h4 className="font-sans font-semibold text-slate-800 text-sm leading-relaxed">
                           {question.text}
                         </h4>
+                        <div className="space-y-1 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                          {question.category && (
+                            <div>
+                              <span className="font-semibold text-slate-500">カテゴリ：</span>{question.category}
+                            </div>
+                          )}
+                          <div>
+                            <span className="font-semibold text-slate-500">根拠：</span>{question.guideline}
+                          </div>
+                          {question.evidenceExamples && question.evidenceExamples.length > 0 && (
+                            <div>
+                              <span className="font-semibold text-slate-500">証跡例：</span>{question.evidenceExamples.join('、')}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Vendor Answer */}
@@ -844,7 +863,7 @@ export default function ClientPortal({
                       >
                         <div>
                           <div className="font-semibold text-slate-800 text-sm">{t.name} セキュリティチェックシート</div>
-                          <div className="text-xs text-slate-500">総設問数: {t.questions.length}問 / ガイドライン対応：SCS、CIS Controls</div>
+                          <div className="text-xs text-slate-500">総設問数: {t.questions.length}問 / ガイドライン対応：{t.questions[0]?.source === 'CIS' ? 'CIS Controls' : 'SCS'}</div>
                         </div>
                         <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${wizardTemplateId === t.id ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
                           {wizardTemplateId === t.id && <span className="w-2 h-2 rounded-full bg-white" />}

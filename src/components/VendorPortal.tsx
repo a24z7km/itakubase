@@ -24,27 +24,33 @@ interface VendorPortalProps {
 
 // AI Proposal Responses based on question ID
 const AI_ANSWER_PROPOSALS: Record<string, string> = {
-  q1: '当社では情報セキュリティ基本方針を制定し、毎年経営会議にて承認を得ています。全社員への周知も社内ポータル等を通じて実施済みです。',
-  q2: '新入社員研修時および全社を対象とした情報セキュリティ教育（年1回・受講義務あり）をE-learningシステムを用いて実施しています。未受講者には自動アラートを出し受講率100%を維持しています。',
-  q3: 'インシデントエスカレーションフローに責任分界および緊急連絡網を定義し、緊急時の担当と報告ルートを明確化しています。連絡先および手順は毎年見直し、最新の情報に更新しています。',
-  q4: 'システム管理者によりアクセス権限付与ルールを整備し、部署変更・退職時のアカウント削除を即座に実施しています。また、半年に一度のアカウント有効性の棚卸を実施しています。',
-  q5: '重要データはクラウド上の暗号化ストレージに毎日自動バックアップ。週次でのデータ整合性テスト、年1回のフルシステムリストア検証を行い稼働を確認しています。',
-  q6: 'WSUS等の統合パッチ管理ツールを用いて、社内PCおよびサーバーのパッチ適用状態を監視・適用。重大な脆弱性が公表された場合は24時間以内に適用・評価する手順を整備しています。',
-  q7: 'CSIRTおよびシステム障害対応手順書を文書化し、社内に配備。年に1回、ランサムウェア感染を想定したインシデント疑似机上演習を実施し手順の有効性を検証しています。',
-  q8: '再委託先の選定基準および管理基準を設けて管理。再委託先とも安全管理措置を含む秘密保持契約（NDA）を締結し、年1回のセキュリティアンケートチェックを行っています。',
+  'scs3-01': '当社ではセキュリティ責任者、担当部署、平時・緊急時の連絡先を体制図と連絡先一覧で定義し、四半期ごとに更新しています。',
+  'scs3-03': '情報セキュリティ方針を制定し、社内ポータルおよび入社時研修で関係者へ周知しています。改訂時は全社通知を行っています。',
+  'scs3-08': 'ユーザIDの発行・変更・削除は申請承認フローで管理し、退職・異動時には不要IDを速やかに無効化しています。',
+  'scs3-09': '重要データは日次でバックアップを取得し、復元手順書に基づいて年1回以上のリストア確認を実施しています。',
+  'scs4-03': '脅威情報と脆弱性情報を定期収集し、監視ログと照合して優先度の高いリスクを運用会議で確認しています。',
+  'scs4-07': '重要システムのアクセス権は最小権限を原則とし、権限付与基準と棚卸記録に基づいて定期確認しています。',
+  'cis-01': '企業資産、端末、サーバ、クラウド資産を台帳で管理し、未管理資産が検出された場合は登録・是正しています。',
+  'cis-05': '脆弱性診断結果とパッチ情報を継続的に確認し、重要度に応じた修正計画と適用記録を管理しています。',
+  'cis-10': 'インシデント対応方針、役割、連絡体制、報告手順を文書化し、年1回の訓練で有効性を確認しています。',
+};
+
+const getAiProposalText = (questionId: string): string => {
+  return AI_ANSWER_PROPOSALS[questionId] || '当該設問について、社内規程・運用記録・証跡資料を確認し、現在の管理状況と実施頻度、責任部署を明記して回答します。必要に応じて関連する台帳、手順書、承認記録、レビュー記録を証跡として添付します。';
 };
 
 // Evidence file names helper based on question ID
 const getDummyFileName = (questionId: string): string => {
   switch (questionId) {
-    case 'q1': return 'security_policy_v2.0_signed.pdf';
-    case 'q2': return 'employee_security_training_report_2025.pdf';
-    case 'q3': return 'incident_escalation_flowchart.pdf';
-    case 'q4': return 'access_privilege_inventory_checklist.xlsx';
-    case 'q5': return 'backup_restoration_test_log.pdf';
-    case 'q6': return 'patch_management_policy_and_reports.pdf';
-    case 'q7': return 'csirt_incident_response_playbook.pdf';
-    case 'q8': return 'subcontractor_evaluation_criteria.pdf';
+    case 'scs3-01': return 'security_organization_contacts.xlsx';
+    case 'scs3-03': return 'security_policy_and_awareness_record.pdf';
+    case 'scs3-08': return 'id_lifecycle_approval_records.xlsx';
+    case 'scs3-09': return 'backup_restore_procedure_and_test_log.pdf';
+    case 'scs4-03': return 'threat_intelligence_monitoring_record.pdf';
+    case 'scs4-07': return 'critical_system_access_review.xlsx';
+    case 'cis-01': return 'enterprise_asset_inventory.xlsx';
+    case 'cis-05': return 'vulnerability_remediation_plan.xlsx';
+    case 'cis-10': return 'incident_response_playbook.pdf';
     default: return 'security_evidence_attachment.pdf';
   }
 };
@@ -150,7 +156,7 @@ export default function VendorPortal({
   // 4. Adopt AI Proposal
   const adoptAiProposal = () => {
     if (!selectedAssessment || !activeProposalQId) return;
-    const proposalText = AI_ANSWER_PROPOSALS[activeProposalQId] || '';
+    const proposalText = getAiProposalText(activeProposalQId);
     onUpdateAssessmentItem(selectedAssessment.id, activeProposalQId, {
       answerText: proposalText,
       status: '記載中'
@@ -521,6 +527,21 @@ export default function VendorPortal({
                       <h4 className="font-sans font-bold text-slate-800 text-sm leading-relaxed">
                         {question.text}
                       </h4>
+                      <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                        {question.category && (
+                          <div>
+                            <span className="font-semibold text-slate-500">カテゴリ：</span>{question.category}
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-semibold text-slate-500">根拠：</span>{question.guideline}
+                        </div>
+                        {question.evidenceExamples && question.evidenceExamples.length > 0 && (
+                          <div>
+                            <span className="font-semibold text-slate-500">証跡例：</span>{question.evidenceExamples.join('、')}
+                          </div>
+                        )}
+                      </div>
 
                       {/* CLIENT FEEDBACK WARNING (if returned / has comment) */}
                       {answer.clientComment && (
@@ -899,7 +920,7 @@ export default function VendorPortal({
                   <div>
                     <span className="block text-xs font-bold text-slate-400 mb-1">AIが作成した回答案:</span>
                     <div className="bg-blue-50/40 border border-blue-100 rounded-lg p-4 text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap">
-                      {AI_ANSWER_PROPOSALS[activeProposalQId]}
+                      {getAiProposalText(activeProposalQId)}
                     </div>
                   </div>
 

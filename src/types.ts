@@ -11,6 +11,13 @@ export interface Question {
   id: string;
   text: string;
   guideline: string;
+  source?: 'SCS' | 'CIS';
+  level?: 'SCS3' | 'SCS4' | 'CIS';
+  category?: string;
+  evidenceExamples?: string[];
+  reviewCriteria?: string;
+  riskTags?: string[];
+  requiredFor?: string;
 }
 
 export interface Template {
