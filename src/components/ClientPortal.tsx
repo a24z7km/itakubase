@@ -186,40 +186,40 @@ export default function ClientPortal({
           className="grid grid-cols-1 md:grid-cols-3 gap-6"
         >
           {/* Dashboard Summary Widget */}
-          <div className="md:col-span-3 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+          <div className="md:col-span-3 bg-slate-950 text-white rounded-2xl p-7 shadow-md relative overflow-hidden">
             <div className="absolute right-0 bottom-0 opacity-10 translate-x-10 translate-y-10">
               <ShieldCheck className="w-64 h-64 text-white" />
             </div>
             <div className="relative z-10">
-              <span className="bg-blue-500/20 text-blue-300 font-semibold text-xs px-3 py-1 rounded-full border border-blue-500/30">
+              <span className="bg-blue-500/20 text-blue-200 font-semibold text-sm px-3 py-1 rounded-full border border-blue-500/30">
                 現在のステータス概要
               </span>
-              <h2 className="text-xl md:text-2xl font-bold mt-3 mb-2 font-sans tracking-tight text-white">
+              <h2 className="text-2xl md:text-3xl font-bold mt-4 mb-3 font-sans tracking-tight text-white">
                 委託先セキュリティ対策のセルフ監査プラットフォーム
               </h2>
-              <p className="text-slate-100 text-sm max-w-2xl mb-4 leading-relaxed">
+              <p className="text-slate-100 text-base max-w-3xl mb-5 leading-relaxed">
                 Excel往復によるセキュリティ管理から、リアルタイムな回答収集とAI支援審査へ。委託先のセキュリティリスクを可視化します。
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-4 border-t border-slate-800">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 mt-7 pt-5 border-t border-slate-800">
                 <div>
-                  <div className="text-slate-400 text-xs">総委託先数</div>
-                  <div className="text-2xl font-bold font-mono">{vendors.length}社</div>
+                  <div className="text-slate-300 text-sm font-medium">総委託先数</div>
+                  <div className="text-3xl font-bold font-mono">{vendors.length}社</div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-xs">審査完了</div>
-                  <div className="text-2xl font-bold font-mono text-emerald-400">
+                  <div className="text-slate-300 text-sm font-medium">審査完了</div>
+                  <div className="text-3xl font-bold font-mono text-emerald-400">
                     {assessments.filter(a => a.status === '完了').length}件
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-xs">審査中 / 確認待ち</div>
-                  <div className="text-2xl font-bold font-mono text-amber-400">
+                  <div className="text-slate-300 text-sm font-medium">審査中 / 確認待ち</div>
+                  <div className="text-3xl font-bold font-mono text-amber-400">
                     {assessments.filter(a => ['確認中', '評価中'].includes(a.status)).length}件
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-xs">回答対応中</div>
-                  <div className="text-2xl font-bold font-mono text-sky-400">
+                  <div className="text-slate-300 text-sm font-medium">回答対応中</div>
+                  <div className="text-3xl font-bold font-mono text-sky-400">
                     {assessments.filter(a => a.status === '回答中').length}件
                   </div>
                 </div>
