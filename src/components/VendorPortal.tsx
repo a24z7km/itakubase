@@ -118,6 +118,7 @@ export default function VendorPortal({
       case '評価中': return 'bg-indigo-50 text-indigo-700 border-indigo-100';
       case '確認済': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
       case '完了': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case '却下': return 'bg-rose-100 text-rose-800 border-rose-200';
       case '更問': return 'bg-rose-100 text-rose-800 border-rose-200';
       default: return 'bg-slate-50 text-slate-600';
     }

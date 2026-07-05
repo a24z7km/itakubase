@@ -5,7 +5,7 @@ import {
   ChevronRight, Calendar, UserCheck, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Vendor, Template, Assessment, AnswerItem, AssessmentStatus, Role } from '../types';
+import { Vendor, Template, Assessment, AnswerItem, AssessmentStatus, FinalDecision } from '../types';
 
 interface ClientPortalProps {
   vendors: Vendor[];
@@ -18,7 +18,7 @@ interface ClientPortalProps {
   onUpdateAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
   onReturnToVendor: (assessmentId: string) => void;
   onConfirmAll: (assessmentId: string) => void;
-  onApproveAssessment: (assessmentId: string) => void;
+  onFinalizeAssessment: (assessmentId: string, decision: FinalDecision, finalComment: string) => boolean;
 }
 
 export default function ClientPortal({
@@ -32,9 +32,9 @@ export default function ClientPortal({
   onUpdateAssessmentStatus,
   onReturnToVendor,
   onConfirmAll,
-  onApproveAssessment
+  onFinalizeAssessment
 }: ClientPortalProps) {
-  const [currentView, setCurrentView] = useState<'home' | 'vendor_list' | 'assessment_detail' | 'request_wizard'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'vendor_list' | 'assessment_detail' | 'approval_decision' | 'request_wizard'>('home');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
 
   // Request wizard states
@@ -50,18 +50,36 @@ export default function ClientPortal({
   // AI assessment review panel state
   const [isAiChecking, setIsAiChecking] = useState(false);
   const [aiCheckResults, setAiCheckResults] = useState<string[] | null>(null);
+  const [finalDecision, setFinalDecision] = useState<FinalDecision>('承認');
+  const [finalDecisionComment, setFinalDecisionComment] = useState('');
 
   // Find selected assessment
   const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
   const selectedVendor = selectedAssessment ? vendors.find(v => v.id === selectedAssessment.vendorId) : null;
   const selectedTemplate = selectedAssessment ? templates.find(t => t.id === selectedAssessment.templateId) : null;
-  const missingClientCommentCount = selectedAssessment && selectedTemplate
+  const evaluationSummary = selectedAssessment && selectedTemplate
+    ? selectedTemplate.questions.reduce((summary, question) => {
+      const answer = selectedAssessment.answers[question.id];
+      if (!answer?.evaluationResult || !answer.evaluationComment?.trim()) {
+        summary.missing += 1;
+      }
+      if (answer?.evaluationResult === 'NG') {
+        summary.ng += 1;
+      }
+      if (answer?.evaluationResult === 'OK') {
+        summary.ok += 1;
+      }
+      return summary;
+    }, { missing: 0, ok: 0, ng: 0 })
+    : { missing: 0, ok: 0, ng: 0 };
+  const hasNgEvaluation = evaluationSummary.ng > 0;
+  const canProceedToFinalDecision = selectedAssessment?.status === '評価中' && evaluationSummary.missing === 0;
+  const missingFurtherQuestionCommentCount = selectedAssessment && selectedTemplate
     ? selectedTemplate.questions.filter(question => {
       const comment = selectedAssessment.answers[question.id]?.clientComment || '';
       return comment.trim().length === 0;
     }).length
     : 0;
-  const canApproveAssessment = selectedAssessment?.status === '評価中' && missingClientCommentCount === 0;
 
   useEffect(() => {
     setCurrentView('home');
@@ -70,6 +88,8 @@ export default function ClientPortal({
     setIsAddingNewVendor(false);
     setAiCheckResults(null);
     setIsAiChecking(false);
+    setFinalDecision('承認');
+    setFinalDecisionComment('');
   }, [homeResetKey]);
 
   // Status Colors for badges
@@ -83,6 +103,7 @@ export default function ClientPortal({
       case '評価中': return 'bg-indigo-50 text-indigo-700 border-indigo-100';
       case '確認済': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
       case '完了': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case '却下': return 'bg-rose-100 text-rose-800 border-rose-200';
       case '更問': return 'bg-rose-100 text-rose-800 border-rose-200';
       default: return 'bg-slate-50 text-slate-600';
     }
@@ -167,6 +188,16 @@ export default function ClientPortal({
                 <span className="text-slate-800 font-medium">回答詳細監査</span>
               </>
             )}
+            {currentView === 'approval_decision' && (
+              <>
+                <ChevronRight className="w-3 h-3" />
+                <button onClick={() => setCurrentView('vendor_list')} className="hover:text-blue-600">委託先一覧</button>
+                <ChevronRight className="w-3 h-3" />
+                <button onClick={() => setCurrentView('assessment_detail')} className="hover:text-blue-600">回答詳細監査</button>
+                <ChevronRight className="w-3 h-3" />
+                <span className="text-slate-800 font-medium">最終判断</span>
+              </>
+            )}
             {currentView === 'request_wizard' && (
               <>
                 <ChevronRight className="w-3 h-3" />
@@ -178,6 +209,7 @@ export default function ClientPortal({
             {currentView === 'home' && '委託先セキュリティ審査管理'}
             {currentView === 'vendor_list' && '委託先セキュリティ審査状況'}
             {currentView === 'assessment_detail' && `${selectedVendor?.name} - セキュリティ回答詳細`}
+            {currentView === 'approval_decision' && `${selectedVendor?.name} - 最終判断`}
             {currentView === 'request_wizard' && '新規セキュリティ評価依頼の作成'}
           </h1>
         </div>
@@ -559,7 +591,8 @@ export default function ClientPortal({
                   evidence: null,
                   assignee: '',
                   clientComment: '',
-                  needsAdditionalConfirm: false
+                  needsAdditionalConfirm: false,
+                  evaluationComment: '',
                 };
 
                 return (
@@ -635,33 +668,84 @@ export default function ClientPortal({
                         )}
                       </div>
 
-                      {/* Client Audit / Comment Box */}
+                      {/* Client Audit / Evaluation Box */}
                       <div className="lg:col-span-3 space-y-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-500 mb-1">
-                            Z社審査官指摘・コメント
-                          </label>
-                          <textarea
-                            id={`client-comment-input-${question.id}`}
-                            value={answer.clientComment}
-                            onChange={(e) => onUpdateAssessmentItem(selectedAssessment.id, question.id, { clientComment: e.target.value })}
-                            placeholder="更問指摘、または合格判断時の補足事項等"
-                            className="w-full h-24 border border-slate-200 rounded-md p-2 text-xs font-sans focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none bg-white"
-                          />
-                        </div>
+                        {selectedAssessment.status === '評価中' ? (
+                          <>
+                            <div>
+                              <div className="block text-xs font-semibold text-slate-500 mb-2">
+                                評価結果 <span className="text-rose-500">*</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  id={`evaluation-ok-${question.id}`}
+                                  onClick={() => onUpdateAssessmentItem(selectedAssessment.id, question.id, { evaluationResult: 'OK' })}
+                                  className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
+                                    answer.evaluationResult === 'OK'
+                                      ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  OK
+                                </button>
+                                <button
+                                  type="button"
+                                  id={`evaluation-ng-${question.id}`}
+                                  onClick={() => onUpdateAssessmentItem(selectedAssessment.id, question.id, { evaluationResult: 'NG' })}
+                                  className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
+                                    answer.evaluationResult === 'NG'
+                                      ? 'border-rose-600 bg-rose-50 text-rose-700'
+                                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  NG
+                                </button>
+                              </div>
+                            </div>
 
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                             id={`checkbox-confirm-${question.id}`}
-                            checked={answer.needsAdditionalConfirm}
-                            onChange={(e) => onUpdateAssessmentItem(selectedAssessment.id, question.id, { needsAdditionalConfirm: e.target.checked })}
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <label htmlFor={`checkbox-confirm-${question.id}`} className="text-xs font-medium text-slate-600">
-                            追加確認フラグを立てる
-                          </label>
-                        </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 mb-1">
+                                評価コメント <span className="text-rose-500">*</span>
+                              </label>
+                              <textarea
+                                id={`evaluation-comment-input-${question.id}`}
+                                value={answer.evaluationComment || ''}
+                                onChange={(e) => onUpdateAssessmentItem(selectedAssessment.id, question.id, { evaluationComment: e.target.value })}
+                                placeholder={answer.evaluationResult === 'NG' ? 'NG理由・残対応リスクとして残す内容を入力' : 'OK判断の根拠・確認内容を入力'}
+                                className="w-full h-28 border border-slate-200 rounded-md p-2 text-xs font-sans focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none bg-white"
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 mb-1">
+                                更問のためのコメント
+                              </label>
+                              <textarea
+                                id={`client-comment-input-${question.id}`}
+                                value={answer.clientComment}
+                                onChange={(e) => onUpdateAssessmentItem(selectedAssessment.id, question.id, { clientComment: e.target.value })}
+                                placeholder="記載不十分な点、追加提出してほしい証跡、再回答依頼内容など"
+                                className="w-full h-24 border border-slate-200 rounded-md p-2 text-xs font-sans focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none bg-white"
+                              />
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                 id={`checkbox-confirm-${question.id}`}
+                                checked={answer.needsAdditionalConfirm}
+                                onChange={(e) => onUpdateAssessmentItem(selectedAssessment.id, question.id, { needsAdditionalConfirm: e.target.checked })}
+                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <label htmlFor={`checkbox-confirm-${question.id}`} className="text-xs font-medium text-slate-600">
+                                追加確認フラグを立てる
+                              </label>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                     </div>
@@ -680,16 +764,16 @@ export default function ClientPortal({
                   </span>
                   <h3 className="font-sans font-bold text-lg text-slate-900 mt-3">最終評価・承認判断</h3>
                   <p className="text-sm text-slate-600 mt-1 leading-relaxed">
-                    各設問の回答、証跡、Z社審査官指摘・コメントを確認し、問題がなければ承認完了へ進めます。記載が不十分な場合は確認中ステータスに戻して再確認できます。
+                    各設問にOK/NGと評価コメントを入力します。NGはリスクとして残対応事項に引き継げます。記載が不十分な場合は確認中ステータスに戻して再確認できます。
                   </p>
                   <div className={`mt-4 rounded-lg border p-3 text-xs ${
-                    canApproveAssessment
+                    canProceedToFinalDecision
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                       : 'border-amber-200 bg-amber-50 text-amber-800'
                   }`}>
-                    {canApproveAssessment
-                      ? '全設問にZ社審査官指摘・コメントが入力されています。承認完了できます。'
-                      : `承認完了には全設問のZ社審査官指摘・コメント入力が必要です。未入力: ${missingClientCommentCount}件`}
+                    {canProceedToFinalDecision
+                      ? `評価入力が完了しています。OK: ${evaluationSummary.ok}件 / NG: ${evaluationSummary.ng}件`
+                      : `最終判断へ進むには全設問のOK/NG選択と評価コメント入力が必要です。未入力: ${evaluationSummary.missing}件`}
                   </div>
                 </div>
 
@@ -707,21 +791,21 @@ export default function ClientPortal({
                   </button>
 
                   <button
-                    id="approve-assessment-btn"
-                    disabled={!canApproveAssessment}
+                    id="open-final-decision-btn"
+                    disabled={!canProceedToFinalDecision}
                     onClick={() => {
-                      if (!canApproveAssessment) {
-                        alert(`承認完了には全設問のZ社審査官指摘・コメント入力が必要です。未入力: ${missingClientCommentCount}件`);
+                      if (!canProceedToFinalDecision) {
+                        alert(`最終判断へ進むには全設問のOK/NG選択と評価コメント入力が必要です。未入力: ${evaluationSummary.missing}件`);
                         return;
                       }
-                      onApproveAssessment(selectedAssessment.id);
-                      alert('セキュリティ審査を承認（完了）しました！指摘コメントの一部は、委託先側の「残対応項目（改善フォロー）」として自動起票されました。');
-                      setCurrentView('vendor_list');
+                      setFinalDecision(hasNgEvaluation ? '承認（残対応項目あり）' : '承認');
+                      setFinalDecisionComment('');
+                      setCurrentView('approval_decision');
                     }}
                     className="inline-flex items-center justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-lg text-sm shadow-sm transition-colors"
                   >
                     <UserCheck className="w-4 h-4 mr-1.5" />
-                    承認完了（完了へ）
+                    最終判断へ
                   </button>
                 </div>
               </div>
@@ -733,6 +817,11 @@ export default function ClientPortal({
                 <p className="text-xs text-slate-400 mt-1">
                   チェックシート審査の結果に応じて、差戻し（更問）または確認完了フェーズへ進めます。
                 </p>
+                {selectedAssessment.status === '確認中' && selectedTemplate && (
+                  <p className="text-xs text-amber-200 mt-2">
+                    更問コメント入力済み: {selectedTemplate.questions.length - missingFurtherQuestionCommentCount}件 / 未入力: {missingFurtherQuestionCommentCount}件
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-2.5">
@@ -762,6 +851,123 @@ export default function ClientPortal({
               </div>
             </div>
           )}
+        </motion.div>
+      )}
+
+      {/* VIEW: APPROVAL DECISION */}
+      {currentView === 'approval_decision' && selectedAssessment && selectedTemplate && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-4xl mx-auto space-y-6"
+        >
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <div className="flex flex-col md:flex-row justify-between gap-4">
+              <div>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-indigo-50 text-indigo-700 border-indigo-100">
+                  最終判断
+                </span>
+                <h2 className="text-xl font-bold text-slate-900 mt-3">
+                  {selectedVendor?.name} セキュリティ対策回答書の最終判断
+                </h2>
+                <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+                  評価結果をもとに、承認可否と最終コメントを記録します。NG評価がある場合は残対応項目として改善フォローへ引き継げます。
+                </p>
+              </div>
+              <button
+                onClick={() => setCurrentView('assessment_detail')}
+                className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium rounded-lg text-sm transition-colors h-max"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1.5" />
+                評価画面に戻る
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
+              {(['承認', '承認（残対応項目あり）', '却下'] as FinalDecision[]).map(decision => {
+                const disabled = (decision === '承認' && hasNgEvaluation)
+                  || (decision === '承認（残対応項目あり）' && !hasNgEvaluation);
+                return (
+                  <button
+                    key={decision}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setFinalDecision(decision)}
+                    className={`rounded-xl border p-4 text-left transition-all ${
+                      finalDecision === decision
+                        ? 'border-blue-600 bg-blue-50 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    } ${disabled ? 'cursor-not-allowed opacity-45 hover:border-slate-200' : ''}`}
+                  >
+                    <div className="font-bold text-sm text-slate-900">{decision}</div>
+                    <div className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {decision === '承認' && 'NGなしでそのまま完了します。'}
+                      {decision === '承認（残対応項目あり）' && 'NG項目を残対応事項として起票し、審査は完了します。'}
+                      {decision === '却下' && '審査を却下として保存します。'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <div className="text-xs text-emerald-700 font-semibold">OK評価</div>
+                <div className="text-2xl font-bold text-emerald-700 font-mono">{evaluationSummary.ok}件</div>
+              </div>
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                <div className="text-xs text-rose-700 font-semibold">NG評価</div>
+                <div className="text-2xl font-bold text-rose-700 font-mono">{evaluationSummary.ng}件</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs text-slate-600 font-semibold">テンプレート</div>
+                <div className="text-sm font-bold text-slate-800 mt-1">{selectedTemplate.name}</div>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                最終判断コメント <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                id="final-decision-comment"
+                value={finalDecisionComment}
+                onChange={(e) => setFinalDecisionComment(e.target.value)}
+                placeholder="承認理由、残対応として求める内容、却下理由などを入力してください。"
+                className="w-full h-32 border border-slate-300 rounded-lg p-3 text-sm font-sans focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none bg-white"
+              />
+            </div>
+
+            <div className="mt-6 flex flex-col sm:flex-row justify-end gap-2">
+              <button
+                onClick={() => setCurrentView('assessment_detail')}
+                className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium rounded-lg text-sm transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                id="finalize-assessment-btn"
+                disabled={!finalDecisionComment.trim()}
+                onClick={() => {
+                  if (!finalDecisionComment.trim()) {
+                    alert('最終判断コメントを入力してください。');
+                    return;
+                  }
+                  const didFinalize = onFinalizeAssessment(selectedAssessment.id, finalDecision, finalDecisionComment);
+                  if (!didFinalize) return;
+                  if (finalDecision === '承認（残対応項目あり）') {
+                    alert('承認しました。NG評価の項目を残対応事項として自動起票しました。');
+                  } else if (finalDecision === '承認') {
+                    alert('承認しました。審査を完了しました。');
+                  }
+                  setCurrentView('vendor_list');
+                }}
+                className="inline-flex items-center justify-center px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold rounded-lg text-sm shadow-sm transition-colors"
+              >
+                最終判断を保存
+              </button>
+            </div>
+          </div>
         </motion.div>
       )}
 

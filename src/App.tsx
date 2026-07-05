@@ -4,7 +4,7 @@ import ClientPortal from './components/ClientPortal';
 import VendorPortal from './components/VendorPortal';
 import { 
   Role, Vendor, Assessment, AnswerItem, AssessmentStatus, 
-  FollowUpItem, Template, PastAnswerSet 
+  FollowUpItem, Template, PastAnswerSet, FinalDecision 
 } from './types';
 import { 
   INITIAL_VENDORS, INITIAL_TEMPLATES, INITIAL_PAST_ANSWERS, INITIAL_FOLLOWUPS 
@@ -49,6 +49,7 @@ export default function App() {
         assignee: '',
         clientComment: '',
         needsAdditionalConfirm: false,
+        evaluationComment: '',
       };
     });
 
@@ -81,6 +82,7 @@ export default function App() {
           assignee: '',
           clientComment: '',
           needsAdditionalConfirm: false,
+          evaluationComment: '',
         };
         return {
           ...ass,
@@ -154,56 +156,76 @@ export default function App() {
     }));
   };
 
-  // 7. Client approves the checklist as completed, promoting audit comments into actionable follow-up records
-  const handleApproveAssessment = (assessmentId: string) => {
+  // 7. Client finalizes the checklist evaluation and promotes NG items into follow-up records
+  const handleFinalizeAssessment = (assessmentId: string, decision: FinalDecision, finalComment: string): boolean => {
     const assessment = assessments.find(a => a.id === assessmentId);
-    if (!assessment) return;
+    if (!assessment) return false;
     if (assessment.status !== '評価中') {
-      alert('承認完了は評価中フェーズで実行してください。');
-      return;
+      alert('最終判断は評価中フェーズで実行してください。');
+      return false;
     }
 
     const assessmentTemplate = templates.find(t => t.id === assessment.templateId);
-    const missingClientCommentCount = assessmentTemplate?.questions.filter(q => {
-      const comment = assessment.answers[q.id]?.clientComment || '';
-      return comment.trim().length === 0;
+    const missingEvaluationCount = assessmentTemplate?.questions.filter(q => {
+      const answer = assessment.answers[q.id];
+      return !answer?.evaluationResult || !answer.evaluationComment?.trim();
     }).length || 0;
-    if (missingClientCommentCount > 0) {
-      alert(`承認完了には全設問のZ社審査官指摘・コメント入力が必要です。未入力: ${missingClientCommentCount}件`);
-      return;
+    if (missingEvaluationCount > 0) {
+      alert(`最終判断には全設問のOK/NG選択と評価コメント入力が必要です。未入力: ${missingEvaluationCount}件`);
+      return false;
+    }
+    if (!finalComment.trim()) {
+      alert('最終判断コメントを入力してください。');
+      return false;
     }
 
-    // Auto promote comments into follow-up items
+    const ngAnswers = assessmentTemplate?.questions
+      .map(question => ({
+        question,
+        answer: assessment.answers[question.id],
+      }))
+      .filter(item => item.answer?.evaluationResult === 'NG') || [];
+
+    if (decision === '承認' && ngAnswers.length > 0) {
+      alert('NG項目がある場合は「承認（残対応項目あり）」または「却下」を選択してください。');
+      return false;
+    }
+    if (decision === '承認（残対応項目あり）' && ngAnswers.length === 0) {
+      alert('残対応項目ありの承認には、少なくとも1件のNG評価が必要です。');
+      return false;
+    }
+
+    if (decision === '却下') {
+      setAssessments(prev => prev.map(ass => {
+        if (ass.id === assessmentId) {
+          return {
+            ...ass,
+            status: '却下' as AssessmentStatus,
+          };
+        }
+        return ass;
+      }));
+      alert('最終判断を「却下」として保存しました。');
+      return true;
+    }
+
     const newFollowUps: FollowUpItem[] = [];
-    Object.keys(assessment.answers).forEach(qId => {
-      const item = assessment.answers[qId];
-      if (item.clientComment && item.clientComment.trim().length > 0) {
-        const question = assessmentTemplate?.questions.find(q => q.id === qId);
-        
+    if (decision === '承認（残対応項目あり）') {
+      ngAnswers.forEach(({ question, answer }) => {
         newFollowUps.push({
-          id: `f_auto_${Date.now()}_${qId}`,
+          id: `f_auto_${Date.now()}_${question.id}`,
           title: question ? `【要是正】${question.text.substring(0, 18)}...` : '要改善セキュリティ事項',
-          agreement: item.clientComment,
+          agreement: `${answer.evaluationComment}\n\n最終判断コメント: ${finalComment}`,
           deadline: assessment.deadline,
           status: '検討中',
-          assignee: item.assignee || 'システム・セキュリティ担当',
+          assignee: answer.assignee || 'システム・セキュリティ担当',
         });
-      }
-    });
-
-    // If no comments but completed, we can also add a general confirmation follow-up
-    if (newFollowUps.length === 0) {
-      newFollowUps.push({
-        id: `f_auto_${Date.now()}_general`,
-        title: `【定期確認】${vendors.find(v => v.id === assessment.vendorId)?.name} 承認後フォロー`,
-        agreement: '今回のセキュリティ対策回答は全項目承認されました。次年度のチェックシート更新に向け、現在のセキュリティポリシー体制を維持してください。',
-        deadline: assessment.deadline,
-        status: '完了',
-        assignee: 'セキュリティ事務局',
       });
     }
 
-    setFollowUps(prev => [...prev, ...newFollowUps]);
+    if (newFollowUps.length > 0) {
+      setFollowUps(prev => [...prev, ...newFollowUps]);
+    }
     
     // Set overall status to Completed
     setAssessments(prev => prev.map(ass => {
@@ -221,6 +243,7 @@ export default function App() {
       }
       return ass;
     }));
+    return true;
   };
 
   // 8. Add a new manual follow-up task
@@ -283,7 +306,7 @@ export default function App() {
             onUpdateAssessmentStatus={handleUpdateAssessmentStatus}
             onReturnToVendor={handleReturnToVendor}
             onConfirmAll={handleConfirmAll}
-            onApproveAssessment={handleApproveAssessment}
+            onFinalizeAssessment={handleFinalizeAssessment}
           />
         ) : (
           <VendorPortal

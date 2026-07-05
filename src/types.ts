@@ -36,6 +36,8 @@ export interface PastAnswerSet {
 }
 
 export type ItemStatus = '依頼中' | '記載中' | '回答済' | '確認済' | '更問';
+export type EvaluationResult = 'OK' | 'NG';
+export type FinalDecision = '承認' | '承認（残対応項目あり）' | '却下';
 
 export interface AnswerItem {
   questionId: string;
@@ -45,9 +47,11 @@ export interface AnswerItem {
   assignee: string;
   clientComment: string;
   needsAdditionalConfirm: boolean;
+  evaluationResult?: EvaluationResult;
+  evaluationComment?: string;
 }
 
-export type AssessmentStatus = '依頼中' | '回答中' | '確認中' | '評価中' | '完了';
+export type AssessmentStatus = '依頼中' | '回答中' | '確認中' | '評価中' | '完了' | '却下';
 
 export interface Assessment {
   id: string;
