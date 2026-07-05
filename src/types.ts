@@ -1,0 +1,63 @@
+export type Role = 'client' | 'vendor';
+
+export interface Vendor {
+  id: string;
+  name: string;
+  contactPerson: string;
+  email: string;
+}
+
+export interface Question {
+  id: string;
+  text: string;
+  guideline: string;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  questions: Question[];
+}
+
+export interface PastAnswerSet {
+  id: string;
+  name: string;
+  templateId: string;
+  year: string;
+  target: string;
+  answers: Record<string, string>; // questionId -> answer text
+}
+
+export type ItemStatus = '依頼中' | '記載中' | '回答済' | '確認済' | '更問';
+
+export interface AnswerItem {
+  questionId: string;
+  answerText: string;
+  status: ItemStatus;
+  evidence: string | null; // filename like "policy.pdf" or null
+  assignee: string;
+  clientComment: string;
+  needsAdditionalConfirm: boolean;
+}
+
+export type AssessmentStatus = '依頼中' | '回答中' | '確認中' | '評価中' | '完了';
+
+export interface Assessment {
+  id: string;
+  vendorId: string;
+  templateId: string;
+  deadline: string;
+  status: AssessmentStatus;
+  answers: Record<string, AnswerItem>; // questionId -> AnswerItem
+}
+
+export type FollowUpStatus = '検討中' | '対応中' | '完了';
+
+export interface FollowUpItem {
+  id: string;
+  title: string;
+  agreement: string;
+  deadline: string;
+  status: FollowUpStatus;
+  assignee: string;
+}

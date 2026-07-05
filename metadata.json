@@ -1,0 +1,6 @@
+{
+  "name": "ITAKU BASE",
+  "description": "委託先セキュリティ管理のチェックシート運用（依頼・回答・評価・承認・改善フォロー）を単一プラットフォームで完結させるツール",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
