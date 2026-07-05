@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "predeploy": "npm run build",
+    "predeploy": "npm run build -- --base=./",
     "deploy": "node scripts/deploy-gh-pages.mjs"
   },
   "dependencies": {

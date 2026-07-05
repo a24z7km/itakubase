@@ -6,65 +6,43 @@
 
 ## URL で共有して見られるようにする方法（GitHub Pages）
 
-このリポジトリは GitHub Pages（`https://a24z7km.github.io/itakubase/`）へ `gh-pages` ブランチで公開できるように設定しています。
+このリポジトリには、GitHub Pages へ自動デプロイするための GitHub Actions ワークフローを追加しています。
 
-> 404 が表示される場合は、まだ `gh-pages` ブランチへの公開が完了していないか、GitHub 側の Pages 設定が終わっていない状態です。以下の手順を実行してください。
+### 1. GitHub に push する
 
-### 前提
+変更を GitHub の `main` ブランチに push します。
 
-- Node.js がインストールされていること
-- このリポジトリへの push 権限があること（`gh-pages` ブランチへ公開するため）
+```bash
+git push origin main
+```
 
-### 手順
+### 2. GitHub Pages の公開元を設定する
 
-1. 最新のコードを取得します。
+GitHub リポジトリ画面で以下を設定します。
 
-   ```bash
-   git clone https://github.com/a24z7km/itakubase.git
-   cd itakubase
-   # すでに clone 済みの場合は
-   git pull --rebase origin main
-   ```
+1. **Settings** を開く
+2. 左メニューの **Pages** を開く
+3. **Build and deployment** の **Source** で **GitHub Actions** を選択する
 
-2. 依存パッケージをインストールします。
+### 3. デプロイ完了を待つ
 
-   ```bash
-   npm install
-   ```
+`main` ブランチへ push すると、`.github/workflows/deploy-pages.yml` が実行されます。
 
-3. ビルドして GitHub Pages 用ブランチへ公開します。
+進捗は GitHub の **Actions** タブから確認できます。成功すると、Pages の公開 URL が表示されます。
 
-   ```bash
-   npm run deploy
-   ```
+公開 URL は通常、次の形式になります。
 
-   `predeploy` が自動で `npm run build` を実行し、生成された `dist/` を `gh-pages` ブランチへ push します。コマンドが最後まで成功すれば公開準備は完了です。
+```text
+https://<GitHubユーザー名>.github.io/<リポジトリ名>/
+```
 
-4. 初回のみ、GitHub 側で Pages の公開元を設定します。
+例：
 
-   1. GitHub のリポジトリ画面で **Settings** を開く
-   2. 左メニューの **Pages** を開く
-   3. **Build and deployment** の **Source** を **Deploy from a branch** にする
-   4. **Branch** を `gh-pages` / `(root)` にして保存する
-
-5. 数分後、以下の URL でアプリを開けます。
-
-   ```text
-   https://a24z7km.github.io/itakubase/
-   ```
+```text
+https://a24z7km.github.io/itakubase/
+```
 
 この URL を共有すると、他の人もブラウザですぐに開けます。
-
-## 設定の仕組み
-
-- `package.json`
-  - `homepage`: 公開先 URL
-  - `predeploy`: `npm run deploy` の前に本番ビルドを実行
-  - `deploy`: `scripts/deploy-gh-pages.mjs` で `dist/` を `gh-pages` ブランチへ公開
-- `scripts/deploy-gh-pages.mjs`
-  - `dist/` の内容を `gh-pages` ブランチへ push する公開用スクリプト
-- `vite.config.ts`
-  - `base: './'`: `/itakubase/` のようなサブディレクトリ配下でも CSS/JS を相対パスで正しく読み込むための設定
 
 ## ローカルで動かす方法
 
@@ -103,3 +81,14 @@ npm run build
 ```
 
 生成物は `dist/` に出力されます。
+
+## GitHub Pages が 404 のときの手動公開
+
+GitHub Pages の画面で 404 が出る場合は、まだ公開用の `gh-pages` ブランチが作成されていない可能性があります。その場合は、以下を実行して `dist/` を `gh-pages` ブランチへ公開してください。
+
+```bash
+npm install
+npm run deploy
+```
+
+その後、GitHub の **Settings** → **Pages** で **Source** を **Deploy from a branch**、**Branch** を `gh-pages` / `(root)` に設定します。数分後に `https://a24z7km.github.io/itakubase/` で開けます。
