@@ -23,7 +23,7 @@
    git clone https://github.com/a24z7km/itakubase.git
    cd itakubase
    # すでに clone 済みの場合は
-   git pull origin main
+   git pull --rebase origin main
    ```
 
 2. 依存パッケージをインストールします。
