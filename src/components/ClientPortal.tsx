@@ -55,6 +55,13 @@ export default function ClientPortal({
   const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
   const selectedVendor = selectedAssessment ? vendors.find(v => v.id === selectedAssessment.vendorId) : null;
   const selectedTemplate = selectedAssessment ? templates.find(t => t.id === selectedAssessment.templateId) : null;
+  const missingClientCommentCount = selectedAssessment && selectedTemplate
+    ? selectedTemplate.questions.filter(question => {
+      const comment = selectedAssessment.answers[question.id]?.clientComment || '';
+      return comment.trim().length === 0;
+    }).length
+    : 0;
+  const canApproveAssessment = selectedAssessment?.status === '評価中' && missingClientCommentCount === 0;
 
   useEffect(() => {
     setCurrentView('home');
@@ -664,54 +671,97 @@ export default function ClientPortal({
             </div>
           </div>
 
-          {/* Bottom Assessment Actions Card */}
-          <div className="bg-slate-900 text-white border border-slate-800 rounded-xl p-6 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <div>
-              <h3 className="font-sans font-bold text-base text-slate-100">審査アクションゲート</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                チェックシート審査の結果に応じて、差戻し（更問）、確認合意、または最終完了（承認）フェーズへ進めます。
-              </p>
-            </div>
+          {selectedAssessment.status === '評価中' ? (
+            <div className="bg-white border border-indigo-200 rounded-xl p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row justify-between gap-5">
+                <div>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-indigo-50 text-indigo-700 border-indigo-100">
+                    評価画面
+                  </span>
+                  <h3 className="font-sans font-bold text-lg text-slate-900 mt-3">最終評価・承認判断</h3>
+                  <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+                    各設問の回答、証跡、Z社審査官指摘・コメントを確認し、問題がなければ承認完了へ進めます。記載が不十分な場合は確認中ステータスに戻して再確認できます。
+                  </p>
+                  <div className={`mt-4 rounded-lg border p-3 text-xs ${
+                    canApproveAssessment
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-amber-200 bg-amber-50 text-amber-800'
+                  }`}>
+                    {canApproveAssessment
+                      ? '全設問にZ社審査官指摘・コメントが入力されています。承認完了できます。'
+                      : `承認完了には全設問のZ社審査官指摘・コメント入力が必要です。未入力: ${missingClientCommentCount}件`}
+                  </div>
+                </div>
 
-            <div className="flex flex-wrap gap-2.5">
-              <button
-                id="reject-assessment-btn"
-                onClick={() => {
-                  onReturnToVendor(selectedAssessment.id);
-                  alert('コメント入りの設問を「更問」として委託先へ差し戻しました。');
-                }}
-                className="inline-flex items-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg text-sm shadow-sm transition-colors"
-              >
-                <AlertTriangle className="w-4 h-4 mr-1.5" />
-                更問（差戻し）
-              </button>
-              
-              <button
-                id="confirm-assessment-btn"
-                onClick={() => {
-                  onConfirmAll(selectedAssessment.id);
-                  alert('すべての回答項目を「確認済」に設定し、評価中フェーズへ進めました。');
-                }}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm shadow-sm transition-colors"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                確認完了（評価中へ）
-              </button>
+                <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 shrink-0">
+                  <button
+                    id="return-to-checking-btn"
+                    onClick={() => {
+                      onUpdateAssessmentStatus(selectedAssessment.id, '確認中');
+                      alert('ステータスを「確認中」に戻しました。回答内容とコメントを再確認してください。');
+                    }}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-medium rounded-lg text-sm transition-colors"
+                  >
+                    <AlertTriangle className="w-4 h-4 mr-1.5" />
+                    確認中に戻す
+                  </button>
 
-              <button
-                id="approve-assessment-btn"
-                onClick={() => {
-                  onApproveAssessment(selectedAssessment.id);
-                  alert('セキュリティ審査を承認（完了）しました！指摘コメントの一部は、委託先側の「残対応項目（改善フォロー）」として自動起票されました。');
-                  setCurrentView('vendor_list');
-                }}
-                className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg text-sm shadow-sm transition-colors"
-              >
-                <UserCheck className="w-4 h-4 mr-1.5" />
-                承認完了（完了へ）
-              </button>
+                  <button
+                    id="approve-assessment-btn"
+                    disabled={!canApproveAssessment}
+                    onClick={() => {
+                      if (!canApproveAssessment) {
+                        alert(`承認完了には全設問のZ社審査官指摘・コメント入力が必要です。未入力: ${missingClientCommentCount}件`);
+                        return;
+                      }
+                      onApproveAssessment(selectedAssessment.id);
+                      alert('セキュリティ審査を承認（完了）しました！指摘コメントの一部は、委託先側の「残対応項目（改善フォロー）」として自動起票されました。');
+                      setCurrentView('vendor_list');
+                    }}
+                    className="inline-flex items-center justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-lg text-sm shadow-sm transition-colors"
+                  >
+                    <UserCheck className="w-4 h-4 mr-1.5" />
+                    承認完了（完了へ）
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-slate-900 text-white border border-slate-800 rounded-xl p-6 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+              <div>
+                <h3 className="font-sans font-bold text-base text-slate-100">審査アクションゲート</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  チェックシート審査の結果に応じて、差戻し（更問）または確認完了フェーズへ進めます。
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2.5">
+                <button
+                  id="reject-assessment-btn"
+                  onClick={() => {
+                    onReturnToVendor(selectedAssessment.id);
+                    alert('コメント入りの設問を「更問」として委託先へ差し戻しました。');
+                  }}
+                  className="inline-flex items-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg text-sm shadow-sm transition-colors"
+                >
+                  <AlertTriangle className="w-4 h-4 mr-1.5" />
+                  更問（差戻し）
+                </button>
+                
+                <button
+                  id="confirm-assessment-btn"
+                  onClick={() => {
+                    onConfirmAll(selectedAssessment.id);
+                    alert('すべての回答項目を「確認済」に設定し、評価中フェーズへ進めました。');
+                  }}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm shadow-sm transition-colors"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                  確認完了（評価中へ）
+                </button>
+              </div>
+            </div>
+          )}
         </motion.div>
       )}
 

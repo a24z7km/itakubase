@@ -158,14 +158,27 @@ export default function App() {
   const handleApproveAssessment = (assessmentId: string) => {
     const assessment = assessments.find(a => a.id === assessmentId);
     if (!assessment) return;
+    if (assessment.status !== '評価中') {
+      alert('承認完了は評価中フェーズで実行してください。');
+      return;
+    }
+
+    const assessmentTemplate = templates.find(t => t.id === assessment.templateId);
+    const missingClientCommentCount = assessmentTemplate?.questions.filter(q => {
+      const comment = assessment.answers[q.id]?.clientComment || '';
+      return comment.trim().length === 0;
+    }).length || 0;
+    if (missingClientCommentCount > 0) {
+      alert(`承認完了には全設問のZ社審査官指摘・コメント入力が必要です。未入力: ${missingClientCommentCount}件`);
+      return;
+    }
 
     // Auto promote comments into follow-up items
     const newFollowUps: FollowUpItem[] = [];
     Object.keys(assessment.answers).forEach(qId => {
       const item = assessment.answers[qId];
       if (item.clientComment && item.clientComment.trim().length > 0) {
-        const template = templates.find(t => t.id === assessment.templateId);
-        const question = template?.questions.find(q => q.id === qId);
+        const question = assessmentTemplate?.questions.find(q => q.id === qId);
         
         newFollowUps.push({
           id: `f_auto_${Date.now()}_${qId}`,
