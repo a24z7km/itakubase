@@ -110,14 +110,24 @@ export default function App() {
   };
 
   // 5. Client returns the checklist to the vendor for corrections (更問・差戻し)
-  const handleReturnToVendor = (assessmentId: string) => {
+  const handleReturnToVendor = (assessmentId: string): number => {
+    const targetAssessment = assessments.find(ass => ass.id === assessmentId);
+    if (!targetAssessment) return 0;
+
+    const returnableQuestionIds = new Set(
+      Object.keys(targetAssessment.answers).filter(qId => {
+        const item = targetAssessment.answers[qId];
+        return item.needsAdditionalConfirm && item.clientComment.trim().length > 0;
+      })
+    );
+    if (returnableQuestionIds.size === 0) return 0;
+
     setAssessments(prev => prev.map(ass => {
       if (ass.id === assessmentId) {
         const nextAnswers = { ...ass.answers };
         Object.keys(nextAnswers).forEach(qId => {
           const item = nextAnswers[qId];
-          // If the auditor left a feedback comment, send this question back into '更問' status
-          if (item.clientComment && item.clientComment.trim().length > 0) {
+          if (returnableQuestionIds.has(qId)) {
             nextAnswers[qId] = {
               ...item,
               status: '更問',
@@ -132,6 +142,7 @@ export default function App() {
       }
       return ass;
     }));
+    return returnableQuestionIds.size;
   };
 
   // 6. Client marks all checklist answers as checked and ready for evaluation (確認完了)

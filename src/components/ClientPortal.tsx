@@ -16,7 +16,7 @@ interface ClientPortalProps {
   onCreateAssessment: (vendorId: string, templateId: string, deadline: string) => void;
   onUpdateAssessmentItem: (assessmentId: string, questionId: string, updates: Partial<AnswerItem>) => void;
   onUpdateAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
-  onReturnToVendor: (assessmentId: string) => void;
+  onReturnToVendor: (assessmentId: string) => number;
   onConfirmAll: (assessmentId: string) => void;
   onFinalizeAssessment: (assessmentId: string, decision: FinalDecision, finalComment: string) => boolean;
 }
@@ -74,12 +74,21 @@ export default function ClientPortal({
     : { missing: 0, ok: 0, ng: 0 };
   const hasNgEvaluation = evaluationSummary.ng > 0;
   const canProceedToFinalDecision = selectedAssessment?.status === '評価中' && evaluationSummary.missing === 0;
-  const missingFurtherQuestionCommentCount = selectedAssessment && selectedTemplate
-    ? selectedTemplate.questions.filter(question => {
-      const comment = selectedAssessment.answers[question.id]?.clientComment || '';
-      return comment.trim().length === 0;
-    }).length
-    : 0;
+  const furtherQuestionSummary = selectedAssessment && selectedTemplate
+    ? selectedTemplate.questions.reduce((summary, question) => {
+      const answer = selectedAssessment.answers[question.id];
+      const hasComment = !!answer?.clientComment.trim();
+      const hasFlag = !!answer?.needsAdditionalConfirm;
+      if (hasFlag && hasComment) {
+        summary.returnable += 1;
+      } else if (hasFlag) {
+        summary.flagWithoutComment += 1;
+      } else if (hasComment) {
+        summary.memoOnly += 1;
+      }
+      return summary;
+    }, { returnable: 0, flagWithoutComment: 0, memoOnly: 0 })
+    : { returnable: 0, flagWithoutComment: 0, memoOnly: 0 };
 
   useEffect(() => {
     setCurrentView('home');
@@ -819,7 +828,7 @@ export default function ClientPortal({
                 </p>
                 {selectedAssessment.status === '確認中' && selectedTemplate && (
                   <p className="text-xs text-amber-200 mt-2">
-                    更問コメント入力済み: {selectedTemplate.questions.length - missingFurtherQuestionCommentCount}件 / 未入力: {missingFurtherQuestionCommentCount}件
+                    差戻し対象: {furtherQuestionSummary.returnable}件 / フラグのみ: {furtherQuestionSummary.flagWithoutComment}件 / メモのみ: {furtherQuestionSummary.memoOnly}件
                   </p>
                 )}
               </div>
@@ -828,8 +837,12 @@ export default function ClientPortal({
                 <button
                   id="reject-assessment-btn"
                   onClick={() => {
-                    onReturnToVendor(selectedAssessment.id);
-                    alert('コメント入りの設問を「更問」として委託先へ差し戻しました。');
+                    const returnedCount = onReturnToVendor(selectedAssessment.id);
+                    if (returnedCount === 0) {
+                      alert('差戻し対象がありません。委託先へ戻す設問は「追加確認フラグ」とコメントの両方を設定してください。コメントのみの設問は手元メモとして残ります。');
+                      return;
+                    }
+                    alert(`${returnedCount}件の設問を「更問」として委託先へ差し戻しました。コメントのみの設問は手元メモとして残しています。`);
                   }}
                   className="inline-flex items-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg text-sm shadow-sm transition-colors"
                 >
