@@ -214,7 +214,7 @@ export default function ClientPortal({
                 <div>
                   <div className="text-slate-300 text-sm font-medium">審査中 / 確認待ち</div>
                   <div className="text-3xl font-bold font-mono text-amber-400">
-                    {assessments.filter(a => ['確認中', '評価中'].includes(a.status)).length}件
+                    {assessments.filter(a => ['依頼中', '確認中', '評価中'].includes(a.status)).length}件
                   </div>
                 </div>
                 <div>
