@@ -5,25 +5,31 @@ import {
   ChevronRight, Calendar, User, Save, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Vendor, Template, Assessment, AnswerItem, AssessmentStatus, 
-  PastAnswerSet, FollowUpItem, FollowUpStatus, ItemStatus 
+import {
+  Vendor, Template, Assessment, AnswerItem, AssessmentStatus,
+  PastAnswerSet, FollowUpItem, FollowUpStatus, ItemStatus, Evidence
 } from '../types';
+import { ALL_QUESTIONS } from '../data';
 
 interface VendorPortalProps {
   vendor: Vendor;
   assessments: Assessment[];
   templates: Template[];
   pastAnswers: PastAnswerSet[];
+  evidences: Evidence[];
   followUps: FollowUpItem[];
   homeResetKey: number;
   onUpdateAssessmentItem: (assessmentId: string, questionId: string, updates: Partial<AnswerItem>) => void;
   onUpdateAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
+  onRegisterEvidence: (evidence: Omit<Evidence, 'id'>) => string;
   onAddFollowUp: (item: Omit<FollowUpItem, 'id'>) => void;
   onUpdateFollowUp: (id: string, updates: Partial<FollowUpItem>) => void;
 }
 
-// AI Proposal Responses based on question ID
+// ===========================================================================
+// MOCK: AI回答提案。GitHub Pages 配信ではAPIキーが露出するため実API接続は行わず、
+// 設問IDに対応する固定文言を返すモックとして維持する（本番実装時に差し替え想定）。
+// ===========================================================================
 const AI_ANSWER_PROPOSALS: Record<string, string> = {
   'scs3-01': '当社ではセキュリティ責任者、担当部署、平時・緊急時の連絡先を体制図と連絡先一覧で定義し、四半期ごとに更新しています。',
   'scs3-03': '情報セキュリティ方針を制定し、社内ポータルおよび入社時研修で関係者へ周知しています。改訂時は全社通知を行っています。',
@@ -61,10 +67,12 @@ export default function VendorPortal({
   assessments,
   templates,
   pastAnswers,
+  evidences,
   followUps,
   homeResetKey,
   onUpdateAssessmentItem,
   onUpdateAssessmentStatus,
+  onRegisterEvidence,
   onAddFollowUp,
   onUpdateFollowUp
 }: VendorPortalProps) {
@@ -124,35 +132,77 @@ export default function VendorPortal({
     }
   };
 
-  // 1. One-click Past Answers Import
+  // 1. One-click Past Answers Import（controlId ベースの突合）
+  // 過去回答は questionId 直結ではなく、管理策ID（controlId）でマッチングする。
+  // これにより、様式（テンプレート）が異なっても同一管理策の回答を再利用候補にできる。
   const handleImportPastAnswers = (pastSetId: string) => {
     if (!selectedAssessment || !selectedTemplate) return;
     const pastSet = pastAnswers.find(pa => pa.id === pastSetId);
     if (!pastSet) return;
 
-    let importCount = 0;
-    selectedTemplate.questions.forEach(q => {
-      if (pastSet.answers[q.id]) {
-        // Append source name to original text
-        const textWithSource = `${pastSet.answers[q.id]}\n（『${pastSet.name}』より転記）`;
-        onUpdateAssessmentItem(selectedAssessment.id, q.id, {
-          answerText: textWithSource,
-          status: '記載中'
-        });
-        importCount++;
+    // 過去回答の questionId を controlId へ解決し、controlId -> 回答本文のマップを作る。
+    const controlToAnswer = new Map<string, string>();
+    Object.entries(pastSet.answers).forEach(([qid, text]) => {
+      const control = ALL_QUESTIONS.find(q => q.id === qid)?.controlId;
+      if (control && !controlToAnswer.has(control)) {
+        controlToAnswer.set(control, text);
       }
     });
 
-    alert(`${importCount}件の設問に対して、過去の回答履歴「${pastSet.name}」から一括転記を行いました。残りの項目を記入してください。`);
+    let importCount = 0;
+    selectedTemplate.questions.forEach(q => {
+      // 同一 questionId、または同一 controlId の過去回答があれば転記する。
+      const directText = pastSet.answers[q.id];
+      const controlText = q.controlId ? controlToAnswer.get(q.controlId) : undefined;
+      const sourceText = directText ?? controlText;
+      if (!sourceText) return;
+
+      const matchNote = directText
+        ? `（『${pastSet.name}』より転記）`
+        : `（『${pastSet.name}』より同一管理策 ${q.controlId} の回答を転記）`;
+      onUpdateAssessmentItem(selectedAssessment.id, q.id, {
+        answerText: `${sourceText}\n${matchNote}`,
+        status: '記載中'
+      });
+      importCount++;
+    });
+
+    alert(`${importCount}件の設問に対して、過去の回答履歴「${pastSet.name}」から管理策ID突合で一括転記を行いました。残りの項目を記入してください。`);
   };
 
   // 2. Mock Attachment Upload
+  // 証跡をレジストリ（Evidence）へ登録し、その id を回答項目の evidenceIds に追加する。
   const handleAddDummyAttachment = (questionId: string) => {
     if (!selectedAssessment) return;
     const fileName = getDummyFileName(questionId);
+    const controlId = ALL_QUESTIONS.find(q => q.id === questionId)?.controlId ?? '';
+    const today = new Date().toISOString().slice(0, 10);
+    const validUntil = `${new Date().getFullYear() + 1}${today.slice(4)}`;
+    const evidenceId = onRegisterEvidence({
+      fileName,
+      controlId,
+      registeredAt: today,
+      validUntil,
+      version: '1.0',
+      disclosureLevel: '提出可',
+    });
+    const current = selectedAssessment.answers[questionId]?.evidenceIds ?? [];
     onUpdateAssessmentItem(selectedAssessment.id, questionId, {
-      evidence: fileName,
+      evidenceIds: [...current, evidenceId],
       status: '記載中'
+    });
+  };
+
+  // 証跡IDから Evidence を解決するヘルパー。
+  const resolveEvidences = (ids: string[]): Evidence[] =>
+    ids.map(id => evidences.find(ev => ev.id === id)).filter((ev): ev is Evidence => Boolean(ev));
+
+  // 指定設問の回答から証跡IDを1件除去する。
+  const removeEvidenceId = (questionId: string, evidenceId: string) => {
+    if (!selectedAssessment) return;
+    const current = selectedAssessment.answers[questionId]?.evidenceIds ?? [];
+    onUpdateAssessmentItem(selectedAssessment.id, questionId, {
+      evidenceIds: current.filter(id => id !== evidenceId),
     });
   };
 
@@ -512,11 +562,12 @@ export default function VendorPortal({
                 questionId: question.id,
                 answerText: '',
                 status: '依頼中',
-                evidence: null,
+                evidenceIds: [],
                 assignee: '',
                 clientComment: '',
                 needsAdditionalConfirm: false
               };
+              const attachedEvidences = resolveEvidences(answer.evidenceIds);
 
               return (
                 <div key={question.id} className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-sm transition-all">
@@ -609,19 +660,24 @@ export default function VendorPortal({
                       <div className="flex flex-col sm:flex-row gap-4 items-end sm:items-center justify-between">
                         {/* Evidence attachment */}
                         <div className="w-full sm:w-auto">
-                          <span className="block text-[10px] font-semibold text-slate-400 mb-1">証跡添付資料（PDF、Excel、Word等）</span>
-                          {answer.evidence ? (
-                            <div className="flex items-center space-x-2 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5 text-xs text-emerald-800 font-mono">
-                              <FileText className="w-4 h-4 text-emerald-600" />
-                              <span>{answer.evidence}</span>
-                              <button
-                                onClick={() => onUpdateAssessmentItem(selectedAssessment.id, question.id, { evidence: null })}
-                                className="text-rose-600 hover:text-rose-800 font-sans font-bold text-xs pl-2"
-                              >
-                                削除
-                              </button>
-                            </div>
-                          ) : (
+                          <span className="block text-[10px] font-semibold text-slate-400 mb-1">証跡添付資料（PDF、Excel、Word等 / 複数登録可）</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {attachedEvidences.map(ev => (
+                              <div key={ev.id} className="flex items-center space-x-2 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5 text-xs text-emerald-800 font-mono">
+                                <FileText className="w-4 h-4 text-emerald-600" />
+                                <span>{ev.fileName}</span>
+                                {ev.controlId && (
+                                  <span className="text-[10px] bg-white border border-emerald-200 text-emerald-700 px-1 py-0.5 rounded font-sans">管理策 {ev.controlId}</span>
+                                )}
+                                <span className="text-[10px] text-emerald-600 font-sans">{ev.disclosureLevel}</span>
+                                <button
+                                  onClick={() => removeEvidenceId(question.id, ev.id)}
+                                  className="text-rose-600 hover:text-rose-800 font-sans font-bold text-xs pl-1"
+                                >
+                                  削除
+                                </button>
+                              </div>
+                            ))}
                             <button
                               id={`upload-evidence-${question.id}`}
                               disabled={selectedAssessment.status === '完了' || selectedAssessment.status === '確認中'}
@@ -631,7 +687,7 @@ export default function VendorPortal({
                               <Upload className="w-3.5 h-3.5 mr-1 text-slate-400" />
                               証跡ファイルを登録
                             </button>
-                          )}
+                          </div>
                         </div>
 
                         {/* Assignee */}
