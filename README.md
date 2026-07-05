@@ -1,20 +1,83 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# ITAKU BASE
 
-# Run and deploy your AI Studio app
+委託先セキュリティ管理チェックシートシステムのデモプロトタイプです。
 
-This contains everything you need to run your app locally.
+このリポジトリは Vite + React で作られており、GitHub Pages にデプロイすると、他の人が URL からすぐに開いて確認できます。
 
-View your app in AI Studio: https://ai.studio/apps/0d629154-dffc-4b39-b68f-fff740399f67
+## URL で共有して見られるようにする方法（GitHub Pages）
 
-## Run Locally
+このリポジトリには、GitHub Pages へ自動デプロイするための GitHub Actions ワークフローを追加しています。
 
-**Prerequisites:**  Node.js
+### 1. GitHub に push する
 
+変更を GitHub の `main` ブランチに push します。
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+git push origin main
+```
+
+### 2. GitHub Pages の公開元を設定する
+
+GitHub リポジトリ画面で以下を設定します。
+
+1. **Settings** を開く
+2. 左メニューの **Pages** を開く
+3. **Build and deployment** の **Source** で **GitHub Actions** を選択する
+
+### 3. デプロイ完了を待つ
+
+`main` ブランチへ push すると、`.github/workflows/deploy-pages.yml` が実行されます。
+
+進捗は GitHub の **Actions** タブから確認できます。成功すると、Pages の公開 URL が表示されます。
+
+公開 URL は通常、次の形式になります。
+
+```text
+https://<GitHubユーザー名>.github.io/<リポジトリ名>/
+```
+
+例：
+
+```text
+https://a24z7km.github.io/itakubase/
+```
+
+この URL を共有すると、他の人もブラウザですぐに開けます。
+
+## ローカルで動かす方法
+
+**Prerequisites:** Node.js
+
+1. 依存関係をインストールします。
+
+   ```bash
+   npm install
+   ```
+
+2. 必要に応じて `.env.local` を作成し、Gemini API キーを設定します。
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+3. 開発サーバーを起動します。
+
+   ```bash
+   npm run dev
+   ```
+
+4. ブラウザで次の URL を開きます。
+
+   ```text
+   http://localhost:3000
+   ```
+
+## ビルド確認
+
+本番配信用のファイルを生成するには、次を実行します。
+
+```bash
+npm run build
+```
+
+生成物は `dist/` に出力されます。
