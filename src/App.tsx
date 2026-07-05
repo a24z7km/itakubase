@@ -12,6 +12,7 @@ import {
 
 export default function App() {
   const [activeRole, setActiveRole] = useState<Role>('client');
+  const [homeResetKey, setHomeResetKey] = useState(0);
 
   // Shared in-memory DB states
   const [vendors, setVendors] = useState<Vendor[]>(INITIAL_VENDORS);
@@ -237,8 +238,13 @@ export default function App() {
       setAssessments([]);
       setFollowUps(INITIAL_FOLLOWUPS);
       setActiveRole('client');
+      setHomeResetKey(prev => prev + 1);
       alert('デモデータを初期化しました！');
     }
+  };
+
+  const handleGoHome = () => {
+    setHomeResetKey(prev => prev + 1);
   };
 
   return (
@@ -247,6 +253,7 @@ export default function App() {
       <Header 
         activeRole={activeRole} 
         onChangeRole={setActiveRole} 
+        onGoHome={handleGoHome}
         resetDemoData={handleResetDemoData}
       />
 
@@ -256,6 +263,7 @@ export default function App() {
             vendors={vendors}
             assessments={assessments}
             templates={templates}
+            homeResetKey={homeResetKey}
             onAddVendor={handleAddVendor}
             onCreateAssessment={handleCreateAssessment}
             onUpdateAssessmentItem={handleUpdateAssessmentItem}
@@ -271,6 +279,7 @@ export default function App() {
             templates={templates}
             pastAnswers={pastAnswers}
             followUps={followUps}
+            homeResetKey={homeResetKey}
             onUpdateAssessmentItem={handleUpdateAssessmentItem}
             onUpdateAssessmentStatus={handleUpdateAssessmentStatus}
             onAddFollowUp={handleAddFollowUp}

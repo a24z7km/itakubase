@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Plus, Users, ClipboardCheck, ArrowLeft, Send, CheckCircle2, 
   AlertTriangle, FileText, BrainCircuit, MessageSquare, AlertCircle, 
@@ -11,6 +11,7 @@ interface ClientPortalProps {
   vendors: Vendor[];
   assessments: Assessment[];
   templates: Template[];
+  homeResetKey: number;
   onAddVendor: (name: string, contact: string, email: string) => void;
   onCreateAssessment: (vendorId: string, templateId: string, deadline: string) => void;
   onUpdateAssessmentItem: (assessmentId: string, questionId: string, updates: Partial<AnswerItem>) => void;
@@ -24,6 +25,7 @@ export default function ClientPortal({
   vendors,
   assessments,
   templates,
+  homeResetKey,
   onAddVendor,
   onCreateAssessment,
   onUpdateAssessmentItem,
@@ -53,6 +55,15 @@ export default function ClientPortal({
   const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
   const selectedVendor = selectedAssessment ? vendors.find(v => v.id === selectedAssessment.vendorId) : null;
   const selectedTemplate = selectedAssessment ? templates.find(t => t.id === selectedAssessment.templateId) : null;
+
+  useEffect(() => {
+    setCurrentView('home');
+    setSelectedAssessmentId(null);
+    setWizardStep(1);
+    setIsAddingNewVendor(false);
+    setAiCheckResults(null);
+    setIsAiChecking(false);
+  }, [homeResetKey]);
 
   // Status Colors for badges
   const getStatusBadgeClass = (status: string) => {

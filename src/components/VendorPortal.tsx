@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ClipboardCheck, AlertCircle, FileText, Upload, BrainCircuit, 
   Send, ListTodo, Plus, Edit2, Check, ArrowLeft, RefreshCw,
@@ -16,6 +16,7 @@ interface VendorPortalProps {
   templates: Template[];
   pastAnswers: PastAnswerSet[];
   followUps: FollowUpItem[];
+  homeResetKey: number;
   onUpdateAssessmentItem: (assessmentId: string, questionId: string, updates: Partial<AnswerItem>) => void;
   onUpdateAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
   onAddFollowUp: (item: Omit<FollowUpItem, 'id'>) => void;
@@ -61,6 +62,7 @@ export default function VendorPortal({
   templates,
   pastAnswers,
   followUps,
+  homeResetKey,
   onUpdateAssessmentItem,
   onUpdateAssessmentStatus,
   onAddFollowUp,
@@ -89,6 +91,15 @@ export default function VendorPortal({
   // Selected Assessment Details
   const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
   const selectedTemplate = selectedAssessment ? templates.find(t => t.id === selectedAssessment.templateId) : null;
+
+  useEffect(() => {
+    setCurrentView('home');
+    setSelectedAssessmentId(null);
+    setActiveProposalQId(null);
+    setIsGeneratingProposal(false);
+    setIsAddingFollowUp(false);
+    setEditingFollowId(null);
+  }, [homeResetKey]);
 
   // Filter assessments for this vendor (A社)
   const myAssessments = assessments.filter(a => a.vendorId === vendor.id);

@@ -5,16 +5,22 @@ import { Role } from '../types';
 interface HeaderProps {
   activeRole: Role;
   onChangeRole: (role: Role) => void;
+  onGoHome: () => void;
   resetDemoData: () => void;
 }
 
-export default function Header({ activeRole, onChangeRole, resetDemoData }: HeaderProps) {
+export default function Header({ activeRole, onChangeRole, onGoHome, resetDemoData }: HeaderProps) {
   return (
     <header className="bg-[#1E293B] border-b border-slate-800 sticky top-0 z-50 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           {/* Logo */}
-          <div className="flex items-center space-x-3">
+          <button
+            type="button"
+            onClick={onGoHome}
+            aria-label="ホームに戻る"
+            className="flex items-center space-x-3 rounded-lg text-left transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900"
+          >
             <div className="p-2 bg-blue-600 text-white rounded flex items-center justify-center shadow-lg shadow-blue-500/10">
               <ShieldCheck className="w-6 h-6" />
             </div>
@@ -26,7 +32,7 @@ export default function Header({ activeRole, onChangeRole, resetDemoData }: Head
                 プロトタイプ
               </span>
             </div>
-          </div>
+          </button>
 
           {/* Role Switcher */}
           <div className="flex items-center space-x-4">
