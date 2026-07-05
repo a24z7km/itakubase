@@ -42,6 +42,8 @@ https://a24z7km.github.io/itakubase/
 3. **Build and deployment** の **Source** で **GitHub Actions** を選択する
 
 設定後に `main` ブランチへ push すると、自動デプロイが実行されます。
+この設定が未完了の場合、Actions の **Configure Pages** ステップで
+`Get Pages site failed` / `Not Found` エラーになります。
 
 ## ローカルで動かす方法
 
