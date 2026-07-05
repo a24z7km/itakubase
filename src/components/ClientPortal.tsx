@@ -5,19 +5,28 @@ import {
   ChevronRight, Calendar, UserCheck, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Vendor, Template, Assessment, AnswerItem, AssessmentStatus, FinalDecision } from '../types';
+import {
+  Vendor, Template, Assessment, AnswerItem, AssessmentStatus, FinalDecision,
+  Evidence, EngagementProfile, LinkType, SystemAccess, VendorSize
+} from '../types';
+import { deriveChecklist } from '../derive';
+import { RULE_DESCRIPTIONS } from '../rules';
+import { ALL_QUESTIONS } from '../data';
 
 interface ClientPortalProps {
   vendors: Vendor[];
   assessments: Assessment[];
   templates: Template[];
+  evidences: Evidence[];
   homeResetKey: number;
   onAddVendor: (name: string, contact: string, email: string) => void;
   onCreateAssessment: (vendorId: string, templateId: string, deadline: string) => void;
+  onCreateDerivedAssessment: (vendorId: string, profile: EngagementProfile, deadline: string) => void;
   onUpdateAssessmentItem: (assessmentId: string, questionId: string, updates: Partial<AnswerItem>) => void;
   onUpdateAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
   onReturnToVendor: (assessmentId: string) => number;
   onConfirmAll: (assessmentId: string) => void;
+  onGenerateFollowUpsFromNg: (assessmentId: string) => number;
   onFinalizeAssessment: (assessmentId: string, decision: FinalDecision, finalComment: string) => boolean;
 }
 
@@ -25,13 +34,16 @@ export default function ClientPortal({
   vendors,
   assessments,
   templates,
+  evidences,
   homeResetKey,
   onAddVendor,
   onCreateAssessment,
+  onCreateDerivedAssessment,
   onUpdateAssessmentItem,
   onUpdateAssessmentStatus,
   onReturnToVendor,
   onConfirmAll,
+  onGenerateFollowUpsFromNg,
   onFinalizeAssessment
 }: ClientPortalProps) {
   const [currentView, setCurrentView] = useState<'home' | 'vendor_list' | 'assessment_detail' | 'approval_decision' | 'request_wizard'>('home');
@@ -42,6 +54,18 @@ export default function ClientPortal({
   const [wizardVendorId, setWizardVendorId] = useState<string>('');
   const [wizardTemplateId, setWizardTemplateId] = useState<string>('');
   const [wizardDeadline, setWizardDeadline] = useState<string>('2026-08-31');
+  // チェックリスト作成モード: テンプレート手動選択 or 業務属性から導出
+  const [wizardMode, setWizardMode] = useState<'template' | 'derive'>('template');
+  // 導出モードの業務属性プロファイル
+  const [profile, setProfile] = useState<EngagementProfile>({
+    linkType: '委託型',
+    handlesPersonalData: false,
+    handlesConfidentialData: true,
+    systemAccess: 'なし',
+    subcontracting: false,
+    cloudService: false,
+    vendorSize: '中規模',
+  });
   const [isAddingNewVendor, setIsAddingNewVendor] = useState(false);
   const [newVendorName, setNewVendorName] = useState('');
   const [newVendorContact, setNewVendorContact] = useState('');
@@ -94,6 +118,7 @@ export default function ClientPortal({
     setCurrentView('home');
     setSelectedAssessmentId(null);
     setWizardStep(1);
+    setWizardMode('template');
     setIsAddingNewVendor(false);
     setAiCheckResults(null);
     setIsAiChecking(false);
@@ -136,14 +161,26 @@ export default function ClientPortal({
     }, 1200);
   };
 
+  // 導出モードのプレビュー（業務属性から確認項目を導出）
+  const derivationPreview = deriveChecklist(profile);
+  const derivedQuestions = derivationPreview.questionIds
+    .map(id => ALL_QUESTIONS.find(q => q.id === id))
+    .filter((q): q is NonNullable<typeof q> => Boolean(q));
+
   // Submit wizard handler
   const handleSendRequest = () => {
-    if (!wizardVendorId || !wizardTemplateId) return;
-    onCreateAssessment(wizardVendorId, wizardTemplateId, wizardDeadline);
+    if (!wizardVendorId) return;
+    if (wizardMode === 'derive') {
+      onCreateDerivedAssessment(wizardVendorId, profile, wizardDeadline);
+    } else {
+      if (!wizardTemplateId) return;
+      onCreateAssessment(wizardVendorId, wizardTemplateId, wizardDeadline);
+    }
     // Reset wizard
     setWizardStep(1);
     setWizardVendorId('');
     setWizardTemplateId('');
+    setWizardMode('template');
     setIsAddingNewVendor(false);
     // Redirect to assessment list
     setCurrentView('vendor_list');
@@ -597,12 +634,17 @@ export default function ClientPortal({
                   questionId: question.id,
                   answerText: '',
                   status: '依頼中',
-                  evidence: null,
+                  evidenceIds: [],
                   assignee: '',
                   clientComment: '',
                   needsAdditionalConfirm: false,
                   evaluationComment: '',
                 };
+                const attachedEvidences = (answer.evidenceIds ?? [])
+                  .map(id => evidences.find(ev => ev.id === id))
+                  .filter((ev): ev is Evidence => Boolean(ev));
+                // 導出モードの場合、この設問が「なぜ選ばれたか」の根拠ルール。
+                const rationaleRuleIds = selectedAssessment.derivation?.perQuestionRationale[question.id] ?? [];
 
                 return (
                   <div key={question.id} className="p-6 hover:bg-slate-50/50 transition-colors">
@@ -633,12 +675,35 @@ export default function ClientPortal({
                           <div>
                             <span className="font-semibold text-slate-500">根拠：</span>{question.guideline}
                           </div>
+                          {question.controlId && (
+                            <div>
+                              <span className="font-semibold text-slate-500">管理策（ISO/IEC 27002）：</span>{question.controlId}
+                            </div>
+                          )}
                           {question.evidenceExamples && question.evidenceExamples.length > 0 && (
                             <div>
                               <span className="font-semibold text-slate-500">証跡例：</span>{question.evidenceExamples.join('、')}
                             </div>
                           )}
                         </div>
+
+                        {/* 導出根拠: なぜこの項目が選ばれたか */}
+                        {rationaleRuleIds.length > 0 && (
+                          <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 text-xs text-indigo-900 space-y-1">
+                            <div className="font-bold flex items-center">
+                              <BrainCircuit className="w-3.5 h-3.5 mr-1 text-indigo-600" />
+                              なぜこの項目が選ばれたか（導出根拠）
+                            </div>
+                            <ul className="list-disc list-inside space-y-0.5 text-slate-700">
+                              {rationaleRuleIds.map(ruleId => (
+                                <li key={ruleId}>
+                                  <span className="font-mono text-[10px] text-indigo-700">{ruleId}</span>
+                                  ：{RULE_DESCRIPTIONS[ruleId] ?? ruleId}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
 
                       {/* Vendor Answer */}
@@ -656,19 +721,22 @@ export default function ClientPortal({
                           )}
                         </div>
 
-                        {/* Attachment Link */}
-                        {answer.evidence && (
-                          <div className="flex items-center justify-between bg-white border border-slate-200 px-3 py-1.5 rounded text-xs text-slate-700">
+                        {/* Attachment Links（複数証跡対応） */}
+                        {attachedEvidences.map(ev => (
+                          <div key={ev.id} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-1.5 rounded text-xs text-slate-700">
                             <span className="flex items-center space-x-1 font-medium">
                               <FileText className="w-3.5 h-3.5 text-slate-500" />
-                              <span className="text-slate-600">証跡ファイル：</span>
-                              <span className="text-blue-600 hover:underline cursor-pointer font-mono">{answer.evidence}</span>
+                              <span className="text-slate-600">証跡：</span>
+                              <span className="text-blue-600 hover:underline cursor-pointer font-mono">{ev.fileName}</span>
+                              {ev.controlId && (
+                                <span className="text-[10px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded">管理策 {ev.controlId}</span>
+                              )}
                             </span>
                             <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded">
-                              添付あり
+                              {ev.disclosureLevel}
                             </span>
                           </div>
-                        )}
+                        ))}
 
                         {answer.assignee && (
                           <div className="text-xs text-slate-500">
@@ -797,6 +865,21 @@ export default function ClientPortal({
                   >
                     <AlertTriangle className="w-4 h-4 mr-1.5" />
                     確認中に戻す
+                  </button>
+
+                  <button
+                    id="generate-followups-from-ng-btn"
+                    disabled={!hasNgEvaluation}
+                    onClick={() => {
+                      const count = onGenerateFollowUpsFromNg(selectedAssessment.id);
+                      alert(count > 0
+                        ? `${count}件のNG項目から改善事項（フォローアップ）を自動生成しました。委託先ポータルの改善事項一覧に反映されます。`
+                        : 'NG評価の項目がありません。');
+                    }}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium rounded-lg text-sm transition-colors"
+                  >
+                    <AlertCircle className="w-4 h-4 mr-1.5" />
+                    NG項目から改善事項を生成
                   </button>
 
                   <button
@@ -1118,49 +1201,170 @@ export default function ClientPortal({
               </motion.div>
             )}
 
-            {/* STEP 2: Select Template */}
+            {/* STEP 2: Select Template or Derive from profile */}
             {wizardStep === 2 && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                 <div>
-                  <h3 className="font-sans font-bold text-slate-800 text-base mb-1">使用するセキュリティチェックシート（テンプレート）</h3>
+                  <h3 className="font-sans font-bold text-slate-800 text-base mb-1">確認項目の決め方を選んでください</h3>
                   <p className="text-xs text-slate-500">
-                    評価項目を定義したテンプレート、または過去回答履歴を転記・インポートできるセットを指定します。
+                    固定テンプレートを手動選択するか、業務属性から必要十分な確認項目を自動導出できます。
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <label className="block text-sm font-semibold text-slate-600">セキュリティ基準・テンプレートの選択</label>
-                  <div className="grid grid-cols-1 gap-3">
-                    {templates.map(t => (
-                      <div 
-                        key={t.id}
-                        onClick={() => setWizardTemplateId(t.id)}
-                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all flex justify-between items-center ${
-                          wizardTemplateId === t.id 
-                            ? 'border-blue-600 bg-blue-50/20' 
-                            : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <div>
-                          <div className="font-semibold text-slate-800 text-sm">{t.name} セキュリティチェックシート</div>
-                          <div className="text-xs text-slate-500">総設問数: {t.questions.length}問 / ガイドライン対応：{t.questions[0]?.source === 'CIS' ? 'CIS Controls' : 'SCS'}</div>
-                        </div>
-                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${wizardTemplateId === t.id ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
-                          {wizardTemplateId === t.id && <span className="w-2 h-2 rounded-full bg-white" />}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-xs text-amber-800">
-                    <p className="font-bold flex items-center mb-1">
-                      <AlertCircle className="w-4 h-4 mr-1 inline" /> 過去回答インポート対応
-                    </p>
-                    <p className="leading-relaxed">
-                      委託先は、回答入力画面にて「SCS ⭐︎3（2025年回答：S社向け）」などの過去の提出済みのデータから回答を一括でコピー・転記することができます。
-                    </p>
-                  </div>
+                {/* モード切替 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    id="wizard-mode-template"
+                    onClick={() => setWizardMode('template')}
+                    className={`text-left p-4 rounded-lg border-2 transition-all ${wizardMode === 'template' ? 'border-blue-600 bg-blue-50/20' : 'border-slate-200 hover:border-slate-300'}`}
+                  >
+                    <div className="font-semibold text-slate-800 text-sm flex items-center">
+                      <FileText className="w-4 h-4 mr-1.5 text-slate-500" />テンプレート手動選択
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">既存の固定テンプレート（SCS★3/★4/CIS）から選ぶ。</div>
+                  </button>
+                  <button
+                    type="button"
+                    id="wizard-mode-derive"
+                    onClick={() => setWizardMode('derive')}
+                    className={`text-left p-4 rounded-lg border-2 transition-all ${wizardMode === 'derive' ? 'border-indigo-600 bg-indigo-50/30' : 'border-slate-200 hover:border-slate-300'}`}
+                  >
+                    <div className="font-semibold text-slate-800 text-sm flex items-center">
+                      <BrainCircuit className="w-4 h-4 mr-1.5 text-indigo-500" />業務属性から導出
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">連携形態・データ・権限などから確認項目を自動導出。</div>
+                  </button>
                 </div>
+
+                {wizardMode === 'template' ? (
+                  <div className="space-y-4">
+                    <label className="block text-sm font-semibold text-slate-600">セキュリティ基準・テンプレートの選択</label>
+                    <div className="grid grid-cols-1 gap-3">
+                      {templates.filter(t => !t.derivation).map(t => (
+                        <div
+                          key={t.id}
+                          onClick={() => setWizardTemplateId(t.id)}
+                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all flex justify-between items-center ${
+                            wizardTemplateId === t.id
+                              ? 'border-blue-600 bg-blue-50/20'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-semibold text-slate-800 text-sm">{t.name} セキュリティチェックシート</div>
+                            <div className="text-xs text-slate-500">総設問数: {t.questions.length}問 / ガイドライン対応：{t.questions[0]?.source === 'CIS' ? 'CIS Controls' : 'SCS'}</div>
+                          </div>
+                          <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${wizardTemplateId === t.id ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
+                            {wizardTemplateId === t.id && <span className="w-2 h-2 rounded-full bg-white" />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-xs text-amber-800">
+                      <p className="font-bold flex items-center mb-1">
+                        <AlertCircle className="w-4 h-4 mr-1 inline" /> 過去回答インポート対応
+                      </p>
+                      <p className="leading-relaxed">
+                        委託先は、回答入力画面にて過去の提出済みデータから、管理策ID（controlId）突合で回答を一括転記できます。
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <label className="block text-sm font-semibold text-slate-600">業務属性プロファイルの入力</label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">連携形態</label>
+                        <select
+                          id="profile-linkType"
+                          value={profile.linkType}
+                          onChange={(e) => setProfile(p => ({ ...p, linkType: e.target.value as LinkType }))}
+                          className="w-full border border-slate-300 rounded p-2 text-sm bg-white"
+                        >
+                          <option value="委託型">委託型</option>
+                          <option value="提携・相互接続型">提携・相互接続型</option>
+                          <option value="供給型">供給型</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">システムアクセス権限</label>
+                        <select
+                          id="profile-systemAccess"
+                          value={profile.systemAccess}
+                          onChange={(e) => setProfile(p => ({ ...p, systemAccess: e.target.value as SystemAccess }))}
+                          className="w-full border border-slate-300 rounded p-2 text-sm bg-white"
+                        >
+                          <option value="なし">なし</option>
+                          <option value="一般権限">一般権限</option>
+                          <option value="管理者権限">管理者権限</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">委託先規模</label>
+                        <select
+                          id="profile-vendorSize"
+                          value={profile.vendorSize}
+                          onChange={(e) => setProfile(p => ({ ...p, vendorSize: e.target.value as VendorSize }))}
+                          className="w-full border border-slate-300 rounded p-2 text-sm bg-white"
+                        >
+                          <option value="小規模">小規模</option>
+                          <option value="中規模">中規模</option>
+                          <option value="大規模">大規模</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {([
+                        ['handlesPersonalData', '個人情報を取り扱う'],
+                        ['handlesConfidentialData', '機密情報を取り扱う'],
+                        ['subcontracting', '再委託が発生する'],
+                        ['cloudService', 'クラウドサービスを利用する'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-center space-x-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded p-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            id={`profile-${key}`}
+                            checked={profile[key]}
+                            onChange={(e) => setProfile(p => ({ ...p, [key]: e.target.checked }))}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* 導出プレビュー */}
+                    <div className="bg-indigo-50/60 border border-indigo-200 p-4 rounded-lg text-xs text-slate-700 space-y-2">
+                      <p className="font-bold text-indigo-900 flex items-center">
+                        <BrainCircuit className="w-4 h-4 mr-1 inline text-indigo-600" />
+                        導出プレビュー：{derivedQuestions.length}問（適用ルール {derivationPreview.appliedRules.length}件）
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {derivationPreview.appliedRules.map(ruleId => (
+                          <span key={ruleId} className="font-mono text-[10px] bg-white border border-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded" title={RULE_DESCRIPTIONS[ruleId]}>
+                            {ruleId}
+                          </span>
+                        ))}
+                      </div>
+                      <ul className="mt-1 space-y-1 max-h-56 overflow-y-auto">
+                        {derivedQuestions.map(q => (
+                          <li key={q.id} className="bg-white border border-slate-200 rounded p-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1 rounded">{q.controlId}</span>
+                              <span className="font-medium text-slate-800">{q.text}</span>
+                            </div>
+                            <div className="text-[10px] text-indigo-700 mt-0.5">
+                              根拠: {(derivationPreview.perQuestionRationale[q.id] ?? []).join('、')}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-between pt-4 border-t border-slate-100">
                   <button
@@ -1171,7 +1375,7 @@ export default function ClientPortal({
                   </button>
                   <button
                     id="wizard-step2-next"
-                    disabled={!wizardTemplateId}
+                    disabled={wizardMode === 'template' && !wizardTemplateId}
                     onClick={() => setWizardStep(3)}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm shadow-sm disabled:opacity-50 transition-colors"
                   >
@@ -1205,9 +1409,25 @@ export default function ClientPortal({
                     </div>
                   </div>
                   <div className="grid grid-cols-3 p-4">
-                    <div className="font-semibold text-slate-500 text-xs">審査規格（テンプレート）</div>
+                    <div className="font-semibold text-slate-500 text-xs">審査規格 / 導出条件</div>
                     <div className="col-span-2 text-slate-800 font-medium">
-                      {templates.find(t => t.id === wizardTemplateId)?.name}
+                      {wizardMode === 'derive' ? (
+                        <div className="space-y-0.5">
+                          <div className="text-indigo-700 flex items-center">
+                            <BrainCircuit className="w-3.5 h-3.5 mr-1" />
+                            業務属性から導出（{derivedQuestions.length}問）
+                          </div>
+                          <div className="text-xs text-slate-500 font-normal">
+                            {profile.linkType} / 権限:{profile.systemAccess} / 規模:{profile.vendorSize}
+                            {profile.handlesPersonalData && ' / 個人情報'}
+                            {profile.handlesConfidentialData && ' / 機密情報'}
+                            {profile.subcontracting && ' / 再委託'}
+                            {profile.cloudService && ' / クラウド'}
+                          </div>
+                        </div>
+                      ) : (
+                        templates.find(t => t.id === wizardTemplateId)?.name
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-3 p-4 items-center">
