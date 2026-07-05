@@ -2,47 +2,56 @@
 
 委託先セキュリティ管理チェックシートシステムのデモプロトタイプです。
 
-このリポジトリは Vite + React で作られており、GitHub Pages にデプロイすると、他の人が URL からすぐに開いて確認できます。
+## 公開 URL
 
-## URL で共有して見られるようにする方法（GitHub Pages）
-
-このリポジトリには、GitHub Pages へ自動デプロイするための GitHub Actions ワークフローを追加しています。
-
-### 1. GitHub に push する
-
-変更を GitHub の `main` ブランチに push します。
-
-```bash
-git push origin main
-```
-
-### 2. GitHub Pages の公開元を設定する
-
-GitHub リポジトリ画面で以下を設定します。
-
-1. **Settings** を開く
-2. 左メニューの **Pages** を開く
-3. **Build and deployment** の **Source** で **GitHub Actions** を選択する
-
-### 3. デプロイ完了を待つ
-
-`main` ブランチへ push すると、`.github/workflows/deploy-pages.yml` が実行されます。
-
-進捗は GitHub の **Actions** タブから確認できます。成功すると、Pages の公開 URL が表示されます。
-
-公開 URL は通常、次の形式になります。
-
-```text
-https://<GitHubユーザー名>.github.io/<リポジトリ名>/
-```
-
-例：
+以下の URL から、他の人もブラウザで ITAKU BASE を開けます。
 
 ```text
 https://a24z7km.github.io/itakubase/
 ```
 
-この URL を共有すると、他の人もブラウザですぐに開けます。
+共有するときは、上記 URL をそのまま送ってください。
+
+## URL で共有して見られるようにする方法（GitHub Pages）
+
+このリポジトリは GitHub Pages に自動デプロイされる設定になっています。
+`main` または `work` ブランチに変更を push すると、GitHub Actions がアプリをビルドして公開 URL を更新します。
+
+### 公開・更新手順
+
+1. 変更を GitHub の `main` または `work` ブランチに push します。
+
+   ```bash
+   git push origin main
+   # または: git push origin work
+   ```
+
+2. GitHub の **Actions** タブで、`Deploy to GitHub Pages` ワークフローが成功するまで待ちます。
+
+3. 成功後、次の公開 URL を開いて表示を確認します。
+
+   ```text
+   https://a24z7km.github.io/itakubase/
+   ```
+
+### 初回だけ必要な GitHub Pages 設定
+
+まだ GitHub Pages を有効化していない場合は、リポジトリ画面で以下を設定してください。
+
+1. **Settings** を開く
+2. 左メニューの **Pages** を開く
+3. **Build and deployment** の **Source** で **GitHub Actions** を選択する
+
+設定後に `main` または `work` ブランチへ push すると、自動デプロイが実行されます。
+
+
+### 公開 URL が開けない場合
+
+`https://a24z7km.github.io/itakubase/` が 404 になる場合は、次を確認してください。
+
+1. GitHub の **Settings** > **Pages** で、**Source** が **GitHub Actions** になっていること
+2. **Actions** タブで `Deploy to GitHub Pages` が成功していること
+3. この変更を含むブランチ（`main` または `work`）が GitHub に push されていること
 
 ## ローカルで動かす方法
 

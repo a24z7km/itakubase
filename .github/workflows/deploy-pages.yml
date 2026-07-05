@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - work
   workflow_dispatch:
 
 permissions:
@@ -28,10 +29,13 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build
         run: npm run build
+
+      - name: Disable Jekyll
+        run: touch dist/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
